@@ -2,7 +2,7 @@
 
 const INTEGER=1;
 const STRING_LIT=2;
-const FLOATING_POINT=3;
+const BOOL=3;
 const VARIABLE =4;
 const NIL=5;
 const LABEL=6;
@@ -17,7 +17,7 @@ function readNextLine() : array {
         $buffer=fgets(STDIN,4096);
         if(strlen($buffer)==0)
             return array();
-    } while($buffer[0]==="#");
+    } while($buffer[0]==="#"||($buffer && !trim($buffer)));
     if (preg_match("/[^a-zA-Z\d_\-\$&%*!?@\s.\\\#]/",$buffer)) {
         return readNextLine();
     }
@@ -137,8 +137,8 @@ class Token {
         if(preg_match("/^int@/",$data)) {
             return INTEGER;
         }
-        if(preg_match("/^float@/",$data)) {
-            return FLOATING_POINT;
+        if(preg_match("/^bool@true$/",$data)||preg_match("/^bool@false$/",$data)) {
+            return BOOL;
         }
         if(preg_match("/^nil@/",$data)) {
             return NIL;
@@ -148,7 +148,7 @@ class Token {
 }
 
 class commandXML {
-    private ?Token $tokens;
+    private array $tokens;
     private ?bool $valid;
 
 
@@ -182,7 +182,7 @@ class commandXML {
                 echo "error";
             }
             else {
-                if(CommandXML::checkSyntax1Arg($this->tokens[0]->getTokenData(),$token->getTokenType())) {
+                if($this->checkSyntax1Arg($this->tokens[0]->getTokenData(),$token->getTokenType())) {
                     $this->tokens[$which]=$token;
                 }
                 else {
@@ -197,7 +197,7 @@ class commandXML {
                 echo "error";
             }
             else {
-                if (CommandXML::checkSyntax2Arg($this->tokens[0]->getTokenData(),$token->getTokenType(),$which)) {
+                if ($this->checkSyntax2Arg($this->tokens[0]->getTokenData(),$token->getTokenType(),$which)) {
                     $this->tokens[$which]=$token;
                 }
                 else {
@@ -207,7 +207,7 @@ class commandXML {
             }
         }
         else {
-            if(CommandXML::checkSyntax3Arg($this->tokens[0]->getTokenData(),$token->getTokenType(),$which)) {
+            if($this->checkSyntax3Arg($this->tokens[0]->getTokenData(),$token->getTokenType(),$which)) {
                 $this->tokens[$which]=$token;
             }
             else {
@@ -216,7 +216,7 @@ class commandXML {
             }
         }
     }
-    private static function checkSyntax1Arg(string $command,int $tokenType) :bool {
+    private function checkSyntax1Arg(string $command,int $tokenType) :bool {
         /*
          * jump call label - <label>
          * pops defvar - <variable>
@@ -236,9 +236,11 @@ class commandXML {
             return($tokenType===INTEGER);
         }
     }
-    private static function checkSyntax2Arg(string $command,int $tokenType,int $which) :bool {
+    private function checkSyntax2Arg(string $command,int $tokenType,int $which) :bool {
         /*
-         * not move type int2char - <variable> <variable or literal>
+         * move type - <variable> <variable or literal>
+         * int2char - <variable> <variable or integer>
+         * not - <variable> <variable or bool>
          * read <variable> <type>
          * strlen <variable> <variable or string>
          */
@@ -252,13 +254,19 @@ class commandXML {
             else if(preg_match("/^r/i",$command)) {
                 return($tokenType==STRING_LIT);
             }
+            else if(preg_match("/^n/i",$command)) {
+                return($tokenType==BOOL||$tokenType==VARIABLE);
+            }
+            else if(preg_match("/^i/i",$command)) {
+                return($tokenType==INTEGER||$tokenType==VARIABLE);
+            }
             else {
                 return($tokenType>=INTEGER && $tokenType<=NIL);
             }
         }
         return false;
     }
-    private static function checkSyntax3Arg(string $command,int $tokenType,int $which) :bool {
+    private function checkSyntax3Arg(string $command,int $tokenType,int $which) :bool {
         /*
          * jumpifeq jumpifneq <label> <variable or literal> <vaiable or literal>
          * everything else <variable> <variable or literal> <variable or literal>
@@ -269,8 +277,54 @@ class commandXML {
             }
             return($tokenType===VARIABLE);
         }
+        else if($which===2) {
+            if(preg_match("/^ad/i",$command)||preg_match("/^su/i",$command)||
+                preg_match("/^m/i",$command)||preg_match("/^i/i",$command)||
+                preg_match("/^se/i",$command)) {
+                return($tokenType===VARIABLE||$tokenType===INTEGER);
+                }
+            else if(preg_match("/^j/i",$command)||preg_match("/^e/i",$command)) {
+                return($tokenType >=INTEGER||$tokenType <= NIL);
+            }
+            else if(preg_match("/^l/i",$command)||preg_match("/^gt/i",$command)) {
+                return($tokenType >=INTEGER||$tokenType <= VARIABLE);
+            }
+            else if(preg_match("/^s/i",$command)||preg_match("/^c/i",$command)||
+                preg_match("/^g/i",$command)) {
+                return($tokenType===VARIABLE||$tokenType===STRING_LIT);
+            }
+            else if(preg_match("/^an/i",$command)||preg_match("/^o/i",$command)) {
+                return($tokenType===VARIABLE||$tokenType===BOOL);
+            }
+            else {
+                return false;
+            }
+        }
         else {
-            return($tokenType >=INTEGER||$tokenType <= NIL);
+            if(preg_match("/^ad/i",$command)||preg_match("/^su/i",$command)||
+                preg_match("/^m/i",$command)||preg_match("/^i/i",$command)||
+                preg_match("/^ge/i",$command)||preg_match("/^st/i",$command)) {
+                return($tokenType===VARIABLE||$tokenType===INTEGER);
+            }
+            else if(preg_match("/^j/i",$command)||preg_match("/^e/i",$command)) {
+                $temp=$this->getToken($which-1)->getTokenType();
+                return($tokenType===VARIABLE||$tokenType===NIL||
+                  $temp===$tokenType||$temp===VARIABLE||$temp===NIL);
+            }
+            else if(preg_match("/^l/i",$command)||preg_match("/^g/i",$command)) {
+                $temp=$this->getToken($which-1)->getTokenType();
+                return($tokenType===VARIABLE||$temp===$tokenType||
+                    $temp===VARIABLE);
+            }
+            else if(preg_match("/^s/i",$command)||preg_match("/^c/i",$command)) {
+                return($tokenType===VARIABLE||$tokenType===STRING_LIT);
+            }
+            else if(preg_match("/^an/i",$command)||preg_match("/^o/i",$command)) {
+                return($tokenType===VARIABLE||$tokenType===BOOL);
+            }
+            else {
+                return false;
+            }
         }
     }
 }
