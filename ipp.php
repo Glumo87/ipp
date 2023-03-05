@@ -12,21 +12,25 @@ const KEYWORD1ARGS=10;
 const KEYWORD2ARGS=11;
 const KEYWORD3ARGS=12;
 
-function readNextLine() : array {
+/*function readNextLine() : array {
     do {
         $buffer=fgets(STDIN,4096);
         if(strlen($buffer)==0)
             return array();
     } while($buffer[0]==="#"||($buffer && !trim($buffer)));
-    if (preg_match("/[^a-zA-Z\d_\-\$&%*!?@\s.\\\#]/",$buffer)) {
+    if (preg_match("/[^a-zA-Z\d_\-\$&%*!?@\s.\\\#<>]+/",$buffer)) {
         return readNextLine();
     }
     $buffer=preg_split("/#+/",$buffer);
     $buffer= preg_replace('/\s+/','#',$buffer[0]);
     $buffer= preg_replace('/#$/','',$buffer);
-    $buffer=preg_split("/#+/",$buffer);
-    return $buffer;
-}
+    if(preg_match('/[<>&]+/',$buffer)) {
+        $buffer= preg_replace('/<+/','&lt',$buffer);
+        $buffer= preg_replace('/>+/','&gt',$buffer);
+        $buffer= preg_replace('/&+/','&amp',$buffer);
+    }
+    return preg_split("/#+/",$buffer);
+}*/
 
 class Token {
     private ?string $data;
@@ -329,20 +333,70 @@ class commandXML {
     }
 }
 
-$header = readNextLine();
-if(!preg_match("/^\.IPPcode23$/",$header[0])) {
-    echo "error";
-}
-$j=0;
-while(count($buffer=readNextLine())!==0) {
-    $token = Token::createToken($buffer[0],true);
-    $Xml[$j]=new commandXML($token);
-    for ($i=1;$i<count($buffer);$i++) {
-        $Xml[$j]->addToken(Token::createToken($buffer[$i],false),$i);
+class IO {
+    private static IO $io;
+    private function __construct() {
+        return $this;
     }
-    print_r($buffer);
-    $j++;
+    public static function createIO() : IO {
+        static $createdObject=false;
+        if($createdObject)
+            return IO::$io;
+        else {
+            IO::$io=new IO();
+            $createdObject=true;
+            return IO::$io;
+        }
+    }
+    public static function getInstance() : IO {
+        return IO::$io;
+    }
+    public function readNextLine() : array {
+        do {
+            $buffer=fgets(STDIN,4096);
+            if(strlen($buffer)==0)
+                return array();
+        } while($buffer[0]==="#"||($buffer && !trim($buffer)));
+        if (preg_match("/[^a-zA-Z\d_\-\$&%*!?@\s.\\\#<>]+/",$buffer)) {
+            return readNextLine();
+        }
+        $buffer=preg_split("/#+/",$buffer);
+        $buffer= preg_replace('/\s+/','#',$buffer[0]);
+        $buffer= preg_replace('/#$/','',$buffer);
+        if(preg_match('/[<>&]+/',$buffer)) {
+            $buffer= preg_replace('/<+/','&lt',$buffer);
+            $buffer= preg_replace('/>+/','&gt',$buffer);
+            $buffer= preg_replace('/&+/','&amp',$buffer);
+        }
+        return preg_split("/#+/",$buffer);
+    }
+    public function assertHeader() : bool {
+        $header = $this->readNextLine();
+        if(!preg_match("/^\.IPPcode23$/",$header[0])) {
+            return false;
+        }
+        return true;
+    }
+    public function readSourceFile() :array {
+        $j=0;
+        $Xml=array();
+        while(count($buffer=$this->readNextLine())!==0) {
+            $token = Token::createToken($buffer[0],true);
+            $Xml[$j]=new commandXML($token);
+            for ($i=1;$i<count($buffer);$i++) {
+                $Xml[$j]->addToken(Token::createToken($buffer[$i],false),$i);
+            }
+            print_r($buffer);
+            $j++;
+        }
+        return $Xml;
+    }
 }
+IO::createIO();
+if(!IO::getInstance()->assertHeader())
+    exit(23);
+$Xml = IO::getInstance()->readSourceFile();
+
 for($i=0;$i<count($Xml);$i++) {
     echo ($Xml[$i]->returnValidity()===true)?"true":"false";
 }
