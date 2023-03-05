@@ -176,11 +176,9 @@ class Token {
 class commandXML {
     private array $tokens;
     private ?bool $valid;
-    private int $line;
 
-    public function __construct(Token $token, int $line) {
+    public function __construct(Token $token) {
         $this->tokens[0] = $token;
-        $this->line=$line;
         //echo "in constructor XML\n";
         $this->valid=!($token->getTokenType()===INVALID);
     }
@@ -309,19 +307,49 @@ class commandXML {
         }
         else if($which===2) {
             if(preg_match("/^s/i",$command)) {
-                return($tokenType==STRING_LIT||$tokenType==VARIABLE);
+                if(!($tokenType==STRING_LIT||$tokenType==VARIABLE)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else if(preg_match("/^r/i",$command)) {
-                return($tokenType==STRING_LIT);
+                if(!($tokenType==STRING_LIT)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else if(preg_match("/^n/i",$command)) {
-                return($tokenType==BOOL||$tokenType==VARIABLE);
+                if(!($tokenType==BOOL||$tokenType==VARIABLE)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else if(preg_match("/^i/i",$command)) {
-                return($tokenType==INTEGER||$tokenType==VARIABLE);
+                if(!($tokenType==INTEGER||$tokenType==VARIABLE)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else {
-                return($tokenType>=INTEGER && $tokenType<=NIL);
+                if(!($tokenType>=INTEGER && $tokenType<=NIL)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
         }
         return false;
@@ -333,28 +361,70 @@ class commandXML {
          */
         if($which===1) {
             if(preg_match("/^j/i",$command)) {
-                return($tokenType===LABEL);
+                if(!($tokenType==LABEL)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
-            return($tokenType===VARIABLE);
+            if(!($tokenType===VARIABLE)) {
+                ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                    "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                    " on line " . IO::getInstance()->getLineCount() . "\n");
+                return false;
+            }
+            return true;
         }
         else if($which===2) {
             if(preg_match("/^ad/i",$command)||preg_match("/^su/i",$command)||
                 preg_match("/^m/i",$command)||preg_match("/^i/i",$command)||
                 preg_match("/^se/i",$command)) {
-                return($tokenType===VARIABLE||$tokenType===INTEGER);
+                if($tokenType==VARIABLE||$tokenType==INTEGER) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
                 }
             else if(preg_match("/^j/i",$command)||preg_match("/^e/i",$command)) {
-                return($tokenType >=INTEGER||$tokenType <= NIL);
+                if(!($tokenType >=INTEGER||$tokenType <= NIL)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else if(preg_match("/^l/i",$command)||preg_match("/^gt/i",$command)) {
-                return($tokenType >=INTEGER||$tokenType <= VARIABLE);
+                if(!($tokenType >=INTEGER||$tokenType <= VARIABLE)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else if(preg_match("/^s/i",$command)||preg_match("/^c/i",$command)||
                 preg_match("/^g/i",$command)) {
-                return($tokenType===VARIABLE||$tokenType===STRING_LIT);
+                if(!($tokenType===VARIABLE||$tokenType===STRING_LIT)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else if(preg_match("/^an/i",$command)||preg_match("/^o/i",$command)) {
-                return($tokenType===VARIABLE||$tokenType===BOOL);
+                if(!($tokenType===VARIABLE||$tokenType===BOOL)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else {
                 return false;
@@ -364,23 +434,53 @@ class commandXML {
             if(preg_match("/^ad/i",$command)||preg_match("/^su/i",$command)||
                 preg_match("/^m/i",$command)||preg_match("/^i/i",$command)||
                 preg_match("/^ge/i",$command)||preg_match("/^st/i",$command)) {
-                return($tokenType===VARIABLE||$tokenType===INTEGER);
+                if(!($tokenType===VARIABLE||$tokenType===INTEGER)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else if(preg_match("/^j/i",$command)||preg_match("/^e/i",$command)) {
                 $temp=$this->getToken($which-1)->getTokenType();
-                return($tokenType===VARIABLE||$tokenType===NIL||
-                  $temp===$tokenType||$temp===VARIABLE||$temp===NIL);
+                if(!($tokenType==VARIABLE||$tokenType==NIL||
+                  $temp==$tokenType||$temp==VARIABLE||$temp==NIL)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else if(preg_match("/^l/i",$command)||preg_match("/^g/i",$command)) {
                 $temp=$this->getToken($which-1)->getTokenType();
-                return($tokenType===VARIABLE||$temp===$tokenType||
-                    $temp===VARIABLE);
+                if(!($tokenType===VARIABLE||$temp===$tokenType||
+                    $temp===VARIABLE)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else if(preg_match("/^s/i",$command)||preg_match("/^c/i",$command)) {
-                return($tokenType===VARIABLE||$tokenType===STRING_LIT);
+                if(!($tokenType===VARIABLE||$tokenType===STRING_LIT)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
-            else if(preg_match("/^an/i",$command)||preg_match("/^o/i",$command)) {
-                return($tokenType===VARIABLE||$tokenType===BOOL);
+            else if(preg_match("/^a/i",$command)||preg_match("/^o/i",$command)) {
+                if(!($tokenType===VARIABLE||$tokenType===BOOL)) {
+                    ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                        "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                        " on line " . IO::getInstance()->getLineCount() . "\n");
+                    return false;
+                }
+                return true;
             }
             else {
                 return false;
@@ -465,6 +565,7 @@ class IO {
         }
         return preg_split("/#+/",$buffer);
     }
+
     public function assertHeader() : bool {
         $header = $this->readNextLine();
         if(!preg_match("/^\.IPPcode23$/",$header[0])) {
@@ -472,12 +573,13 @@ class IO {
         }
         return true;
     }
+
     public function readSourceFile() :array {
         $j=0;
         $Xml=array();
         while(count($buffer=$this->readNextLine())!==0) {
             $token = Token::createToken($buffer[0],true);
-            $Xml[$j]=new commandXML($token,$this->getLineCount());
+            $Xml[$j]=new commandXML($token);
             if ($Xml[$j]->returnValidity()===true) {
                 ErrorCollector::getInstance()->logError(INVALIDOPCODE,
                     "Invalid opcode ".$Xml[$j]->getToken(0)->getTokenData()." on line ".$this->getLineCount()."\n");
@@ -490,6 +592,7 @@ class IO {
         }
         return $Xml;
     }
+
     public function createXMLFile(array $Xml) :void {
 
     }
