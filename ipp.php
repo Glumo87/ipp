@@ -11,7 +11,9 @@ const KEYWORD0ARGS=9;
 const KEYWORD1ARGS=10;
 const KEYWORD2ARGS=11;
 const KEYWORD3ARGS=12;
-
+const INVALIDHEADER=21;
+const INVALIDOPCODE=22;
+const INVALIDSYNTAX=23;
 /*function readNextLine() : array {
     do {
         $buffer=fgets(STDIN,4096);
@@ -52,6 +54,26 @@ class Token {
     public static function createToken(string $data, bool $isAKeyword) : Token {
         return new Token($data,Token::decideTokenType($data,$isAKeyword));
     }
+
+    public static function tokenTypeToString(int $type) : string {
+        switch ($type) {
+            case INTEGER:
+                return "integer";
+            case STRING_LIT:
+                return "string";
+            case BOOL:
+                return "bool";
+            case NIL:
+                return "nil";
+            case VARIABLE:
+                return "variable";
+            case LABEL:
+                return "label";
+            default:
+                return "invalid";
+        }
+    }
+
     private static function decideTokenType(string $data,bool $isAKeyword) : int {
         if($isAKeyword) {
             return Token::decideKeyword($data);
@@ -154,11 +176,12 @@ class Token {
 class commandXML {
     private array $tokens;
     private ?bool $valid;
+    private int $line;
 
-
-    public function __construct(Token $token) {
+    public function __construct(Token $token, int $line) {
         $this->tokens[0] = $token;
-        echo "in constructor XML\n";
+        $this->line=$line;
+        //echo "in constructor XML\n";
         $this->valid=!($token->getTokenType()===INVALID);
     }
     public function returnValidity() :bool {
@@ -168,22 +191,27 @@ class commandXML {
         return $this->tokens[$which];
     }
     public function addToken(Token $token, int $which) : void {
-        echo "trying to add token ",$token->getTokenData()," on position: ",$which," of type ",$token->getTokenType(),"\n";
+        //echo "trying to add token ",$token->getTokenData()," on position: ",$which," of type ",$token->getTokenType(),"\n";
         if($this->tokens[0]->getTokenType()===INVALID) {
+            ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                "Invalid token ".$token->getTokenData()." on line ".IO::getInstance()->getLineCount()."\n");
             return;
         }
         if($which>3) {
             $this->valid=false;
-            echo "error";
+            ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                "Too many arguments on line ".IO::getInstance()->getLineCount()."\n");
         }
         else if($this->tokens[0]->getTokenType()===KEYWORD0ARGS) {
             $this->valid=false;
-            echo "error";
+            ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                "Too many arguments on line ".IO::getInstance()->getLineCount()."\n");
         }
         else if($this->tokens[0]->getTokenType()===KEYWORD1ARGS) {
             if ($which >1) {
                 $this->valid=false;
-                echo "error";
+                ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                    "Too many arguments on line ".IO::getInstance()->getLineCount()."\n");
             }
             else {
                 if($this->checkSyntax1Arg($this->tokens[0]->getTokenData(),$token->getTokenType())) {
@@ -191,14 +219,14 @@ class commandXML {
                 }
                 else {
                     $this->valid=false;
-                    echo "error";
                 }
             }
         }
         else if($this->tokens[0]->getTokenType()===KEYWORD2ARGS) {
             if ($which >2) {
                 $this->valid=false;
-                echo "error";
+                ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                    "Too many arguments on line ".IO::getInstance()->getLineCount()."\n");
             }
             else {
                 if ($this->checkSyntax2Arg($this->tokens[0]->getTokenData(),$token->getTokenType(),$which)) {
@@ -206,7 +234,6 @@ class commandXML {
                 }
                 else {
                     $this->valid=false;
-                    echo "error";
                 }
             }
         }
@@ -216,7 +243,6 @@ class commandXML {
             }
             else {
                 $this->valid=false;
-                echo "error";
             }
         }
     }
@@ -228,16 +254,40 @@ class commandXML {
          * exit <integer>
          */
         if((preg_match("/^j/i",$command))||(preg_match("/^c/i",$command))||(preg_match("/^l/i",$command))) {
-            return ($tokenType===LABEL);
+            if(!$tokenType==LABEL) {
+                ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                    "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                    " on line " . IO::getInstance()->getLineCount() . "\n");
+                return false;
+            }
+            return true;
         }
         else if((preg_match("/^po/i",$command))||(preg_match("/^de/i",$command))) {
-            return ($tokenType===VARIABLE);
+            if(!($tokenType==VARIABLE)) {
+                ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                    "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                    " on line " . IO::getInstance()->getLineCount() . "\n");
+                return false;
+            }
+            return true;
         }
         else if((preg_match("/^pu/i",$command))||(preg_match("/^dp/i",$command))||(preg_match("/^w/i",$command))) {
-            return ($tokenType>=INTEGER &&$tokenType<=NIL);
+            if (!($tokenType>=INTEGER &&$tokenType<=NIL)) {
+                ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                    "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                    " on line " . IO::getInstance()->getLineCount() . "\n");
+                return false;
+            }
+            return true;
         }
         else {
-            return($tokenType===INTEGER);
+            if(!($tokenType==INTEGER)) {
+                ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                    "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                    " on line " . IO::getInstance()->getLineCount() . "\n");
+                return false;
+            }
+            return true;
         }
     }
     private function checkSyntax2Arg(string $command,int $tokenType,int $which) :bool {
@@ -249,7 +299,13 @@ class commandXML {
          * strlen <variable> <variable or string>
          */
         if($which===1) {
-            return($tokenType===VARIABLE);
+            if(!($tokenType===VARIABLE)) {
+                ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
+                    "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
+                    " on line " . IO::getInstance()->getLineCount() . "\n");
+                return false;
+            }
+            return true;
         }
         else if($which===2) {
             if(preg_match("/^s/i",$command)) {
@@ -333,32 +389,71 @@ class commandXML {
     }
 }
 
-class IO {
-    private static IO $io;
+class ErrorCollector {
+    private int $errorCode; //first error
+    private array $errorMessages;
+    private int $errorCount;
+    private static ErrorCollector $error;
     private function __construct() {
+        $this->errorCode=0;
+        $this->errorCount=0;
+        $this->errorMessages=array();
         return $this;
     }
-    public static function createIO() : IO {
+    public static function createErrorCollector() : void {
         static $createdObject=false;
-        if($createdObject)
-            return IO::$io;
-        else {
+        if(!$createdObject) {
+            ErrorCollector::$error=new ErrorCollector();
+            $createdObject=true;
+        }
+    }
+    public static function getInstance() : ErrorCollector {
+        return ErrorCollector::$error;
+    }
+    public function logError(int $errorCode,string $errorMessage) :void {
+        $this->errorCode=($this->errorCode==0)? $errorCode:$this->errorCode;
+        $this->errorMessages[$this->errorCount++]=$errorMessage;
+    }
+    public function finish() : void {
+        for($i=0;$i<$this->errorCount;$i++) {
+            fwrite(STDERR,$this->errorMessages[$i]);
+        }
+        exit($this->errorCode);
+    }
+}
+
+class IO {
+    private static IO $io;
+    private int $lineCount;
+    private function __construct() {
+        $this->lineCount=0;
+        return $this;
+    }
+    public static function createIO() : void {
+        static $createdObject=false;
+        if(!$createdObject) {
             IO::$io=new IO();
             $createdObject=true;
-            return IO::$io;
         }
     }
     public static function getInstance() : IO {
         return IO::$io;
     }
+    private function incrementLineCount() : void {
+        $this->lineCount++;
+    }
+    public function getLineCount() : int {
+        return $this->lineCount;
+    }
     public function readNextLine() : array {
         do {
             $buffer=fgets(STDIN,4096);
+            $this->incrementLineCount();
             if(strlen($buffer)==0)
                 return array();
         } while($buffer[0]==="#"||($buffer && !trim($buffer)));
         if (preg_match("/[^a-zA-Z\d_\-\$&%*!?@\s.\\\#<>]+/",$buffer)) {
-            return readNextLine();
+            return $this->readNextLine();
         }
         $buffer=preg_split("/#+/",$buffer);
         $buffer= preg_replace('/\s+/','#',$buffer[0]);
@@ -382,22 +477,30 @@ class IO {
         $Xml=array();
         while(count($buffer=$this->readNextLine())!==0) {
             $token = Token::createToken($buffer[0],true);
-            $Xml[$j]=new commandXML($token);
+            $Xml[$j]=new commandXML($token,$this->getLineCount());
+            if ($Xml[$j]->returnValidity()===true) {
+                ErrorCollector::getInstance()->logError(INVALIDOPCODE,
+                    "Invalid opcode ".$Xml[$j]->getToken(0)->getTokenData()." on line ".$this->getLineCount()."\n");
+            }
             for ($i=1;$i<count($buffer);$i++) {
                 $Xml[$j]->addToken(Token::createToken($buffer[$i],false),$i);
             }
-            print_r($buffer);
+            print_r($buffer); //testing
             $j++;
         }
         return $Xml;
     }
+    public function createXMLFile(array $Xml) :void {
+
+    }
 }
+ErrorCollector::createErrorCollector();
 IO::createIO();
 if(!IO::getInstance()->assertHeader())
     exit(23);
 $Xml = IO::getInstance()->readSourceFile();
 
-for($i=0;$i<count($Xml);$i++) {
+for($i=0;$i<count($Xml);$i++) { //testing
     echo ($Xml[$i]->returnValidity()===true)?"true":"false";
 }
 
