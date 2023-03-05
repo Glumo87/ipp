@@ -6,7 +6,9 @@ const BOOL=3;
 const VARIABLE =4;
 const NIL=5;
 const LABEL=6;
-const INVALID=7;
+const TYPE=7;
+const INVALID=8;
+
 const KEYWORD0ARGS=9;
 const KEYWORD1ARGS=10;
 const KEYWORD2ARGS=11;
@@ -35,16 +37,27 @@ const INVALIDSYNTAX=23;
 }*/
 
 class Token {
-    private ?string $data;
-    private ?int $tokenType;
+    private string $data;
+    private int $tokenType;
 
     public function __construct(string $data,int $tokenType) {
         $this->data=$data;
         $this->tokenType=$tokenType;
     }
 
+    public function changeTokenType(int $type) : void {
+        $this->tokenType=$type;
+    }
+
     public function getTokenType() : int {
         return $this->tokenType;
+    }
+
+    public function clipToken() : string {
+        if(preg_match("/[^@]+/",$this->getTokenData()))
+            return $this->getTokenData();
+        else
+            return preg_split("/@/",$this->getTokenData())[1];
     }
 
     public function getTokenData() : string {
@@ -58,7 +71,7 @@ class Token {
     public static function tokenTypeToString(int $type) : string {
         switch ($type) {
             case INTEGER:
-                return "integer";
+                return "int";
             case STRING_LIT:
                 return "string";
             case BOOL:
@@ -66,9 +79,11 @@ class Token {
             case NIL:
                 return "nil";
             case VARIABLE:
-                return "variable";
+                return "var";
             case LABEL:
                 return "label";
+            case TYPE:
+                return "type";
             default:
                 return "invalid";
         }
@@ -175,16 +190,26 @@ class Token {
 
 class commandXML {
     private array $tokens;
-    private ?bool $valid;
+    private bool $valid;
+    private int $argCount;
 
     public function __construct(Token $token) {
         $this->tokens[0] = $token;
         //echo "in constructor XML\n";
         $this->valid=!($token->getTokenType()===INVALID);
+        if($this->valid)
+            $this->argCount=$token->getTokenType()-KEYWORD0ARGS;
+        else
+            $this->argCount=0;
     }
     public function returnValidity() :bool {
         return $this->valid;
     }
+
+    public function returnArgCount() : int {
+        return $this->argCount;
+    }
+
     public function getToken(int $which) : Token {
         return $this->tokens[$which];
     }
@@ -227,7 +252,7 @@ class commandXML {
                     "Too many arguments on line ".IO::getInstance()->getLineCount()."\n");
             }
             else {
-                if ($this->checkSyntax2Arg($this->tokens[0]->getTokenData(),$token->getTokenType(),$which)) {
+                if ($this->checkSyntax2Arg($this->tokens[0]->getTokenData(), $which,$token)) {
                     $this->tokens[$which]=$token;
                 }
                 else {
@@ -288,7 +313,7 @@ class commandXML {
             return true;
         }
     }
-    private function checkSyntax2Arg(string $command,int $tokenType,int $which) :bool {
+    private function checkSyntax2Arg(string $command,int $which,Token $token) :bool {
         /*
          * move type - <variable> <variable or literal>
          * int2char - <variable> <variable or integer>
@@ -296,6 +321,8 @@ class commandXML {
          * read <variable> <type>
          * strlen <variable> <variable or string>
          */
+        $tokenType=$token->getTokenType();
+        $tokenData=$token->getTokenData();
         if($which===1) {
             if(!($tokenType===VARIABLE)) {
                 ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
@@ -316,12 +343,13 @@ class commandXML {
                 return true;
             }
             else if(preg_match("/^r/i",$command)) {
-                if(!($tokenType==STRING_LIT)) {
+                if(!($tokenType==LABEL&&($tokenData=="int"||$tokenData=="bool"||$tokenData=="string"))) {
                     ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
                         "Unexpected token type of " . Token::tokenTypeToString($tokenType) .
                         " on line " . IO::getInstance()->getLineCount() . "\n");
                     return false;
                 }
+                $token->changeTokenType(TYPE);
                 return true;
             }
             else if(preg_match("/^n/i",$command)) {
@@ -593,19 +621,63 @@ class IO {
         return $Xml;
     }
 
-    public function createXMLFile(array $Xml) :void {
+    private function createXMLHeader(DOMDocument $doc) : DOMDocument {
+        $doc = new DOMDocument();
+        $doc->encoding='utf-8';
+        $doc->xmlVersion = '1.0';
+        $doc->formatOutput = true;
+        return $doc;
+    }
 
+    public function createXMLFile(array $Xml) :void {
+        $doc = $this->createXMLHeader();
+        $root =$doc->createElement('program');
+        $program_attr= new DOMAttr('language','IPPcode23');
+        $root->setAttributeNode($program_attr);
+        $doc->appendChild($root);
+        for($i=0;$i<count($Xml);$i++) {
+            $instruction_node=$doc->createElement('instruction');
+            $instruction_node_attr1= new DOMAttr('order',(string)($i+1));
+            $instruction_node_attr2= new DOMAttr('opcode',$Xml[$i]->getToken(0)->getTokenData());
+            $instruction_node->setAttributeNode($instruction_node_attr1);
+            $instruction_node->setAttributeNode($instruction_node_attr2);
+            for($j=0;$j<$Xml[$i]->getArgCount();$j++) {
+                $string="arg1";
+                switch($j) {
+                    case 1:
+                        $string="arg2";
+                        break;
+                    case 2:
+                        $string="arg3";
+                        break;
+                    default:
+                        break;
+                }
+                $argument_node=$doc->createElement($string,$Xml[$i]->getToken($j+1)->clipToken());
+                $argument_node_att=new DOMAttr('type',
+                    Token::tokenTypeToString($Xml[$i]->getToken($j+1)->getTokenData()));
+                $argument_node->setAttributeNode($argument_node_att);
+                $instruction_node->appendChild($argument_node);
+            }
+            $root->appendChild($instruction_node);
+        }
+        $doc->saveXML();
     }
 }
 ErrorCollector::createErrorCollector();
 IO::createIO();
 if(!IO::getInstance()->assertHeader())
-    exit(23);
+    ErrorCollector::getInstance()->logError(INVALIDHEADER,
+        "Invalid Header\n");
 $Xml = IO::getInstance()->readSourceFile();
-
+$isValid=true;
 for($i=0;$i<count($Xml);$i++) { //testing
-    echo ($Xml[$i]->returnValidity()===true)?"true":"false";
+    $isValid=$isValid && $Xml[$i]->returnValidity();
 }
+echo"here";
+if($isValid)
+    IO::getInstance()->createXMLFile($Xml);
+ErrorCollector::getInstance()->finish();
 
 /*echo $buffer,":";
 echo strlen($buffer),"\n";
