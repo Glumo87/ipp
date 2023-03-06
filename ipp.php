@@ -36,10 +36,12 @@ class Token {
     }
 
     public function clipToken() : string {
-        if(preg_match("/[^@]+/",$this->getTokenData()))
+        if ($this->getTokenType()==VARIABLE||$this->getTokenType()==LABEL||$this->getTokenType()==TYPE)
             return $this->getTokenData();
-        else
-            return preg_split("/@/",$this->getTokenData())[1];
+        else {
+            $buffer=preg_split("/@/",$this->getTokenData());
+            return $buffer[1];
+        }
     }
 
     public function getTokenData() : string {
