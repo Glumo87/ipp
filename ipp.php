@@ -17,7 +17,10 @@ const INVALIDHEADER=21;
 const INVALIDOPCODE=22;
 const INVALIDSYNTAX=23;
 
-
+/*
+ *
+ *
+ */
 class Token {
     private string $data;
     private int $tokenType;
@@ -26,7 +29,8 @@ class Token {
         $this->data=$data;
         $this->tokenType=$tokenType;
     }
-
+    //unclean solution, which is used only for the "type" token type, as in lexical analysis cant
+    //decide whether its a type or a label
     public function changeTokenType(int $type) : void {
         $this->tokenType=$type;
     }
@@ -34,7 +38,7 @@ class Token {
     public function getTokenType() : int {
         return $this->tokenType;
     }
-
+    //used when creating XML file, clips the string@ int@ bool@ etc.
     public function clipToken() : string {
         if ($this->getTokenType()==VARIABLE||$this->getTokenType()==LABEL||$this->getTokenType()==TYPE)
             return $this->getTokenData();
@@ -48,11 +52,10 @@ class Token {
     public function getTokenData() : string {
         return $this->data;
     }
-
+    //method used to construct new tokens to have easier way to distinguish keywords
     public static function createToken(string $data, bool $isAKeyword) : Token {
         return new Token($data,Token::decideTokenType($data,$isAKeyword));
     }
-
     public static function tokenTypeToString(int $type) : string {
         switch ($type) {
             case INTEGER:
@@ -73,7 +76,7 @@ class Token {
                 return "invalid";
         }
     }
-
+    //represented the decideTokenType methods as static rather than creating a new class specifically for it
     private static function decideTokenType(string $data,bool $isAKeyword) : int {
         if($isAKeyword) {
             return Token::decideKeyword($data);
@@ -172,7 +175,8 @@ class Token {
         return INVALID;
     }
 }
-
+//in this class the syntax analysis takes place, each object represents one command of IPPcode23
+//it is then later used to create XML file easily
 class commandXML {
     private array $tokens;
     private bool $valid;
@@ -180,10 +184,10 @@ class commandXML {
 
     public function __construct(Token $token) {
         $this->tokens[0] = $token;
-        //echo "in constructor XML\n";
         $this->valid=!($token->getTokenType()===INVALID);
         if($this->valid)
-            $this->argCount=$token->getTokenType()-KEYWORD0ARGS;
+            $this->argCount=$token->getTokenType()-KEYWORD0ARGS; //relies on constants from KEYWORD0ARGS to KEYWORD3ARGS
+        // being one away from each other
         else
             $this->argCount=0;
     }
@@ -198,8 +202,10 @@ class commandXML {
     public function getToken(int $which) : Token {
         return $this->tokens[$which];
     }
+    //addToken AKA the syntax analysis, very long method mostly due to the Error logging parts
     public function addToken(Token $token, int $which) : void {
-        //echo "trying to add token ",$token->getTokenData()," on position: ",$which," of type ",$token->getTokenType(),"\n";
+        //start of the part where the obvious erros are being checked
+
         if($this->tokens[0]->getTokenType()===INVALID) {
             ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
                 "Invalid token ".$token->getTokenData()." on line ".IO::getInstance()->getLineCount()."\n");
@@ -210,13 +216,15 @@ class commandXML {
             ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
                 "Too many arguments on line ".IO::getInstance()->getLineCount()."\n");
         }
+
+        //start of the part where based on how many argumets for the keyword are expected the respective methods get called
         else if($this->tokens[0]->getTokenType()===KEYWORD0ARGS) {
-            $this->valid=false;
+            $this->valid=false; //error is thrown as this keyword cant have arguments
             ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
                 "Too many arguments on line ".IO::getInstance()->getLineCount()."\n");
         }
         else if($this->tokens[0]->getTokenType()===KEYWORD1ARGS) {
-            if ($which >1) {
+            if ($which >1) { //if we have more than one argument, error is thrown
                 $this->valid=false;
                 ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
                     "Too many arguments on line ".IO::getInstance()->getLineCount()."\n");
@@ -231,7 +239,7 @@ class commandXML {
             }
         }
         else if($this->tokens[0]->getTokenType()===KEYWORD2ARGS) {
-            if ($which >2) {
+            if ($which >2) { //if we have more than two arguments, error is thrown
                 $this->valid=false;
                 ErrorCollector::getInstance()->logError(INVALIDSYNTAX,
                     "Too many arguments on line ".IO::getInstance()->getLineCount()."\n");
@@ -245,7 +253,7 @@ class commandXML {
                 }
             }
         }
-        else {
+        else { //no point in checking if there is more than 3 args as that was tested for at the start of the method
             if($this->checkSyntax3Arg($this->tokens[0]->getTokenData(),$token->getTokenType(),$which)) {
                 $this->tokens[$which]=$token;
             }
@@ -256,6 +264,7 @@ class commandXML {
     }
     private function checkSyntax1Arg(string $command,int $tokenType) :bool {
         /*
+         * the keywords get grouped based on their syntax and tested
          * jump call label - <label>
          * pops defvar - <variable>
          * pushs dprint write <variable or literal>
@@ -300,6 +309,10 @@ class commandXML {
     }
     private function checkSyntax2Arg(string $command,int $which,Token $token) :bool {
         /*
+         * the keywords get grouped based on their syntax and tested
+         * this method has different arguments to the other ones as in case of "read" the 2nd argument, which is expected
+         * to be "type", is for simplicity represented as label from lexical analysis and only here it is possible to decide
+         * if its of type "type"
          * move type - <variable> <variable or literal>
          * int2char - <variable> <variable or integer>
          * not - <variable> <variable or bool>
@@ -369,8 +382,15 @@ class commandXML {
     }
     private function checkSyntax3Arg(string $command,int $tokenType,int $which) :bool {
         /*
+         * the keywords get grouped based on their syntax and tested
+         * in case of eq and jumpifeq, jumpifneq, lt, gt the sameness of types needs to be enforced between arg2 and arg3
          * jumpifeq jumpifneq <label> <variable or literal> <vaiable or literal>
-         * everything else <variable> <variable or literal> <variable or literal>
+         * add sub mul idiv <variable> <variable or int> <variable or int>
+         * eq <label> <variable or literal> <variable or literal>
+         * lt gt <variable> <variable or literal - nil> <variable or literal - nil>
+         * and or <variable> <variable or bool> <variable or bool>
+         * setchar <variable> <int> <string>
+         * getchar <variable> <string> <int>
          */
         if($which===1) {
             if(preg_match("/^j/i",$command)) {
@@ -501,7 +521,8 @@ class commandXML {
         }
     }
 }
-
+//class for error collection, uses the singleton design pattern, also method finish is last method called
+//at the end of the program as it contains "exit"
 class ErrorCollector {
     private int $errorCode; //first error
     private array $errorMessages;
@@ -512,6 +533,9 @@ class ErrorCollector {
         $this->errorCount=0;
         $this->errorMessages=array();
         return $this;
+    }
+    public function getErrorCount() :int {
+        return $this->errorCount;
     }
     public static function createErrorCollector() : void {
         static $createdObject=false;
@@ -524,7 +548,8 @@ class ErrorCollector {
         return ErrorCollector::$error;
     }
     public function logError(int $errorCode,string $errorMessage) :void {
-        $this->errorCode=($this->errorCode==0)? $errorCode:$this->errorCode;
+        $this->errorCode=($this->errorCode==0)? $errorCode:$this->errorCode; //ensures that first error code will be
+        // the return value
         $this->errorMessages[$this->errorCount++]=$errorMessage;
     }
     public function finish() : void {
@@ -534,7 +559,7 @@ class ErrorCollector {
         exit($this->errorCode);
     }
 }
-
+//another singleton class, used for reading input and outputting XML file
 class IO {
     private static IO $io;
     private int $lineCount;
@@ -558,6 +583,8 @@ class IO {
     public function getLineCount() : int {
         return $this->lineCount;
     }
+    //this method not only reads next line but also splits the tokens into an array for easier manipulation later
+    //also ignores the comments
     public function readNextLine() : array {
         do {
             $buffer=fgets(STDIN,4096);
@@ -580,6 +607,7 @@ class IO {
     }
 
     public function readSourceFile() :array {
+        //reads stdin until EOF
         $j=0;
         $Xml=array();
         while(count($buffer=$this->readNextLine())!==0) {
@@ -592,7 +620,6 @@ class IO {
             for ($i=1;$i<count($buffer);$i++) {
                 $Xml[$j]->addToken(Token::createToken($buffer[$i],false),$i);
             }
-            //print_r($buffer); //testing
             $j++;
         }
         return $Xml;
@@ -605,7 +632,8 @@ class IO {
         $doc->formatOutput = true;
         return $doc;
     }
-
+    //fairly straightforward method to create xml file, reads an array of commands, each command consists of tokens
+    //one XMLCommand object = one instruction element
     public function createXMLFile(array $Xml) :void {
         $doc = $this->createXMLHeader();
         $root =$doc->createElement('program');
@@ -641,22 +669,17 @@ class IO {
         echo $doc->saveXML(null,LIBXML_NOEMPTYTAG);
     }
 }
+//the "main" part of the program, two singletons get instantiated, then an array of XMLCommands
+// get created, which, if no syntax or lexical error is found, is then passed to IO class to create XML
 ErrorCollector::createErrorCollector();
 IO::createIO();
 if(!IO::getInstance()->assertHeader())
     ErrorCollector::getInstance()->logError(INVALIDHEADER,
         "Invalid Header\n");
 $Xml = IO::getInstance()->readSourceFile();
-$isValid=true;
-for($i=0;$i<count($Xml);$i++) { //testing
-    $isValid=$isValid && $Xml[$i]->returnValidity();
-}
-if($isValid)
+
+if(ErrorCollector::getInstance()->getErrorCount()==0)
     IO::getInstance()->createXMLFile($Xml);
 ErrorCollector::getInstance()->finish();
-
-/*echo $buffer,":";
-echo strlen($buffer),"\n";
-*/
 
 ?>
