@@ -1,7 +1,9 @@
+# Ukazka kódu se sémantickou chybou (skript parse.php ale vrací 0 místo 54), která nemá být detekována už v parse.php. Obsahuje příklad elementu bez podelementů, který lze zapsat krátkým i dlouhým způsobem.
 .IPPcode23
-stri2int GF@ajaja GF@ajaja GF@ajaja
-stri2int GF@ajaja GF@ajaja int@45
-stri2int GF@ajaja string@ajaja int@45
-stri2int GF@ajaja string@ajaja GF@a45
 
-
+CREATEFRAME # příklad instrukce bez operandů, v XML možný zápis delším způsobem
+DEFVAR TF@x
+PUSHFRAME
+CREATEFRAME
+WRITE TF@x  # přístup k nedefinované proměnné, což se v parse.php neodhalí
+POPFRAME # tato instrukce bude pro ilustraci ve výstupním XML zapsána kratším způsobem

@@ -40,6 +40,7 @@ class Token {
             return $this->getTokenData();
         else {
             $buffer=preg_split("/@/",$this->getTokenData());
+            echo $buffer[1],"\n";
             return $buffer[1];
         }
     }
@@ -564,17 +565,18 @@ class IO {
             if(strlen($buffer)==0)
                 return array();
         } while($buffer[0]==="#"||($buffer && !trim($buffer)));
-        if (preg_match("/[^a-zA-Z\d_\-\$&%*!?@\s.\\\#<>]+/",$buffer)) {
+        /*if (preg_match("/[^a-zA-Z\d_\-\$&%*!?@\s.\\\#<>]+/",$buffer)) {
+            echo "here";
             return $this->readNextLine();
-        }
+        }*/
         $buffer=preg_split("/#+/",$buffer);
         $buffer= preg_replace('/\s+/','#',$buffer[0]);
         $buffer= preg_replace('/#$/','',$buffer);
-        if(preg_match('/[<>&]+/',$buffer)) {
+        /*if(preg_match('/[<>&]+/',$buffer)) {
+            $buffer= preg_replace('/&+/','&amp',$buffer);
             $buffer= preg_replace('/<+/','&lt',$buffer);
             $buffer= preg_replace('/>+/','&gt',$buffer);
-            $buffer= preg_replace('/&+/','&amp',$buffer);
-        }
+        }*/
         return preg_split("/#+/",$buffer);
     }
 
@@ -599,7 +601,7 @@ class IO {
             for ($i=1;$i<count($buffer);$i++) {
                 $Xml[$j]->addToken(Token::createToken($buffer[$i],false),$i);
             }
-            //print_r($buffer); //testing
+            print_r($buffer); //testing
             $j++;
         }
         return $Xml;
@@ -620,7 +622,7 @@ class IO {
         $root->setAttributeNode($program_attr);
         $doc->appendChild($root);
         for($i=0;$i<count($Xml);$i++) {
-            $instruction_node=$doc->createElement('instruction');
+            $instruction_node=$doc->createElement('instruction','');
             $instruction_node_attr1= new DOMAttr('order',(string)($i+1));
             $instruction_node_attr2= new DOMAttr('opcode',$Xml[$i]->getToken(0)->getTokenData());
             $instruction_node->setAttributeNode($instruction_node_attr1);
@@ -637,7 +639,7 @@ class IO {
                     default:
                         break;
                 }
-                $argument_node=$doc->createElement($string,$Xml[$i]->getToken($j+1)->clipToken());
+                $argument_node=$doc->createElement($string,htmlspecialchars($Xml[$i]->getToken($j+1)->clipToken()));
                 $argument_node_att=new DOMAttr('type',
                     Token::tokenTypeToString($Xml[$i]->getToken($j+1)->getTokenType()));
                 $argument_node->setAttributeNode($argument_node_att);
