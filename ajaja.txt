@@ -1,7 +1,4 @@
 .IPPcode23
-stri2int int@45 bool@true 
-stri2int ajaja bool@true 
-stri2int GF@ajaja bool@true bool@true
 stri2int GF@ajaja GF@ajaja GF@ajaja
 stri2int GF@ajaja GF@ajaja int@45
 stri2int GF@ajaja string@ajaja int@45

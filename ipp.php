@@ -16,25 +16,7 @@ const KEYWORD3ARGS=12;
 const INVALIDHEADER=21;
 const INVALIDOPCODE=22;
 const INVALIDSYNTAX=23;
-/*function readNextLine() : array {
-    do {
-        $buffer=fgets(STDIN,4096);
-        if(strlen($buffer)==0)
-            return array();
-    } while($buffer[0]==="#"||($buffer && !trim($buffer)));
-    if (preg_match("/[^a-zA-Z\d_\-\$&%*!?@\s.\\\#<>]+/",$buffer)) {
-        return readNextLine();
-    }
-    $buffer=preg_split("/#+/",$buffer);
-    $buffer= preg_replace('/\s+/','#',$buffer[0]);
-    $buffer= preg_replace('/#$/','',$buffer);
-    if(preg_match('/[<>&]+/',$buffer)) {
-        $buffer= preg_replace('/<+/','&lt',$buffer);
-        $buffer= preg_replace('/>+/','&gt',$buffer);
-        $buffer= preg_replace('/&+/','&amp',$buffer);
-    }
-    return preg_split("/#+/",$buffer);
-}*/
+
 
 class Token {
     private string $data;
@@ -608,20 +590,20 @@ class IO {
         while(count($buffer=$this->readNextLine())!==0) {
             $token = Token::createToken($buffer[0],true);
             $Xml[$j]=new commandXML($token);
-            if ($Xml[$j]->returnValidity()===true) {
+            if (!($Xml[$j]->returnValidity()===true)) {
                 ErrorCollector::getInstance()->logError(INVALIDOPCODE,
                     "Invalid opcode ".$Xml[$j]->getToken(0)->getTokenData()." on line ".$this->getLineCount()."\n");
             }
             for ($i=1;$i<count($buffer);$i++) {
                 $Xml[$j]->addToken(Token::createToken($buffer[$i],false),$i);
             }
-            print_r($buffer); //testing
+            //print_r($buffer); //testing
             $j++;
         }
         return $Xml;
     }
 
-    private function createXMLHeader(DOMDocument $doc) : DOMDocument {
+    private function createXMLHeader() : ?DOMDocument {
         $doc = new DOMDocument();
         $doc->encoding='utf-8';
         $doc->xmlVersion = '1.0';
@@ -641,7 +623,7 @@ class IO {
             $instruction_node_attr2= new DOMAttr('opcode',$Xml[$i]->getToken(0)->getTokenData());
             $instruction_node->setAttributeNode($instruction_node_attr1);
             $instruction_node->setAttributeNode($instruction_node_attr2);
-            for($j=0;$j<$Xml[$i]->getArgCount();$j++) {
+            for($j=0;$j<$Xml[$i]->returnArgCount();$j++) {
                 $string="arg1";
                 switch($j) {
                     case 1:
@@ -655,13 +637,13 @@ class IO {
                 }
                 $argument_node=$doc->createElement($string,$Xml[$i]->getToken($j+1)->clipToken());
                 $argument_node_att=new DOMAttr('type',
-                    Token::tokenTypeToString($Xml[$i]->getToken($j+1)->getTokenData()));
+                    Token::tokenTypeToString($Xml[$i]->getToken($j+1)->getTokenType()));
                 $argument_node->setAttributeNode($argument_node_att);
                 $instruction_node->appendChild($argument_node);
             }
             $root->appendChild($instruction_node);
         }
-        $doc->saveXML();
+        echo $doc->saveXML();
     }
 }
 ErrorCollector::createErrorCollector();
@@ -674,7 +656,6 @@ $isValid=true;
 for($i=0;$i<count($Xml);$i++) { //testing
     $isValid=$isValid && $Xml[$i]->returnValidity();
 }
-echo"here";
 if($isValid)
     IO::getInstance()->createXMLFile($Xml);
 ErrorCollector::getInstance()->finish();
