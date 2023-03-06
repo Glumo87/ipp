@@ -580,6 +580,11 @@ class IO {
     private function incrementLineCount() : void {
         $this->lineCount++;
     }
+    public function printHelp() : void {
+        echo "This script reads IPPCode23 from STDIN, performs lexical and syntax analysis\n";
+        echo "and prints XML representation of the source to STDOUT\n";
+        exit(0);
+    }
     public function getLineCount() : int {
         return $this->lineCount;
     }
@@ -673,6 +678,9 @@ class IO {
 // get created, which, if no syntax or lexical error is found, is then passed to IO class to create XML
 ErrorCollector::createErrorCollector();
 IO::createIO();
+if($argc>1 && $argv[1]=="--help") {
+    IO::getInstance()->printHelp();
+}
 if(!IO::getInstance()->assertHeader())
     ErrorCollector::getInstance()->logError(INVALIDHEADER,
         "Invalid Header\n");
